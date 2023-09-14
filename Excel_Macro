@@ -1,0 +1,118 @@
+Sub Try_API()
+    Dim request As New WinHttpRequest
+    
+    Dim aArrayList() As Variant
+    Dim iRowNum As Integer
+    Dim precios As New Collection
+    Dim variantes As New Collection
+    Dim stocks As New Collection
+    Dim costos As New Collection
+             
+    aArrayList = Range("C3:C50")
+    
+    For iRowNum = 1 To UBound(aArrayList)
+        
+        Dim codigo As String
+        codigo = aArrayList(iRowNum, 1)
+        Debug.Print codigo
+        If codigo = "" Then
+            Exit For
+        Else
+        Dim url_precio As String
+        url_precio = "http://api.bsale.cl/v1/price_lists/14/details.json?code=" + codigo
+        request.Open "GET", url_precio
+        request.SetRequestHeader "access_token", "[YOUR OWN ACCESS TOKEN]"
+        request.Send
+    
+        If request.Status <> 200 Then
+            Debug.Print request.ResponseText
+            Exit Sub
+        End If
+        
+        Dim response As Object
+        Set response = JsonConverter.ParseJson(request.ResponseText)
+        Dim atributos As Collection
+        Set atributos = response("items")
+        'OBTENEMOS EL NUMERO DE VARIANTE (PARA EL COSTO) Y EL PRECIO SEGUN LISTA
+        For Each elemento In atributos
+            precios.Add Round(elemento("variantValue"), 2)
+            Dim variant_items As Dictionary
+            Set variant_items = elemento("variant")
+            variantes.Add (variant_items("id"))
+            Next elemento
+        'OBTENEMOS LA CANTIDAD DE STOCK ACTUAL
+        Dim url_stock As String
+        url_stock = "https://api.bsale.cl/v1/stocks.json?code=" + codigo
+        request.Open "GET", url_stock
+        request.SetRequestHeader "access_token", "[YOUR OWN ACCESS TOKEN]"
+        request.Send
+    
+        If request.Status <> 200 Then
+            Debug.Print request.ResponseText
+            Exit Sub
+        End If
+        
+        Dim response_stock As Object
+        Set response_stock = JsonConverter.ParseJson(request.ResponseText)
+        Dim atributos_stock As Collection
+        Set atributos_stock = response_stock("items")
+    
+        For Each stock In atributos_stock
+            stocks.Add (stock("quantity"))
+        Next stock
+        End If
+        
+    Next iRowNum
+    'PARA CADA VARIANTE OBTENEMOS SU COSTO
+    For Each variante In variantes
+        Dim url_costo As String
+        url_costo = "https://api.bsale.cl/v1/variants/" + variante + "/costs.json"
+        request.Open "GET", url_costo
+        request.SetRequestHeader "access_token", "[YOUR OWN ACCESS TOKEN]"
+        request.Send
+    
+        If request.Status <> 200 Then
+            Debug.Print request.ResponseText
+            Exit Sub
+        End If
+        
+        Dim response_costo As Object
+        Set response_costo = JsonConverter.ParseJson(request.ResponseText)
+        Dim atributos_costo As Collection
+        Set atributos_costo = response_costo("history")
+        If atributos_costo.Count = 0 Then
+            costos.Add (0)
+        Else
+            Dim costo As Dictionary
+            Set costo = atributos_costo(atributos_costo.Count)
+            costos.Add (costo("cost"))
+        End If
+    Next variante
+    
+    Dim i As Long
+    For i = 1 To precios.Count
+        Debug.Print (i), variantes(i), precios(i), stocks(i), costos(i)
+    Next i
+    
+    Dim item As Variant, currentRow As Long
+    currentRow = 3
+    For Each item In precios
+        ActiveSheet.Cells(currentRow, 11).Value = item
+        currentRow = currentRow + 1
+    Next item
+    currentRow = 3
+    For Each item In stocks
+        ActiveSheet.Cells(currentRow, 5).Value = item
+        currentRow = currentRow + 1
+    Next item
+    currentRow = 3
+    For Each item In costos
+        ActiveSheet.Cells(currentRow, 7).Value = item
+        currentRow = currentRow + 1
+    Next item
+
+
+End Sub
+
+
+
